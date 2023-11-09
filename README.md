@@ -1,4 +1,4 @@
-# HypoTerm
+# HypoTermQA
 
 This repository contains 
 
