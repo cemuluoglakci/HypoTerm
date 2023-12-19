@@ -1,6 +1,6 @@
-# HypoTerm
+# HypoTermQA
 
-This repository contains 
+HypoTermQA repository contains 
 
 * HypoTerm Benchmarking Dataset <a href="link_to_dataset" class="button">View Dataset</a>
 * The code to evaluate hallucination tendency of LLMs <a href="link_to_code" class="button">View Code</a>
