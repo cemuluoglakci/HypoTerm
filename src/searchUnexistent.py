@@ -1,12 +1,12 @@
+import types
 from googleapiclient.discovery import build
 import json
 
 
 class Searcher():
 
-    def __init__(self) -> None:
-        with open('keys.json') as keys_file:
-            self.keys_list = json.load(keys_file)
+    def __init__(self, settings:types.ModuleType) -> None:
+        self.keys_list = settings.google_api_keys
         self.get_keys()
 
     def get_keys(self):

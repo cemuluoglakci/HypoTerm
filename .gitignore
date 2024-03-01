@@ -1,6 +1,5 @@
 **/settings.py
 
-data/
 __pycache__/
 *.py[cod]
 *$py.class
