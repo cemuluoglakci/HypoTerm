@@ -98,7 +98,7 @@ class Embeddings():
         output_fields = ["title"]
 
         search_collection = Collection(name=collection_name)
-        if collection_name == "wiki_text4":
+        if collection_name == "wiki_text":
             output_fields.append("text")
 
         try:
@@ -191,7 +191,7 @@ class EmbeddingIterator(Embeddings):
 class EmbeddingTextIterator(EmbeddingIterator):
     def __init__(self, settings) -> None:
         super().__init__(settings)
-        self.set_collection("wiki_text4", self.text_schema)
+        self.set_collection("wiki_text", self.text_schema)
         self.projection["text"] = 1
         self.reset_iterator()
         self.columns.append("text")
