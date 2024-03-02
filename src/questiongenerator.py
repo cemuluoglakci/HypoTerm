@@ -4,9 +4,9 @@ import logging
 import pandas as pd
 import datetime
 import time
-import promptlayer
 import json
 import re
+from openai import OpenAI
 
 from prompts import templates
 from src.sqldb import HallucinationDb
@@ -31,8 +31,11 @@ class QuestionGenerator(ABC):
     def __init__(self, settings) -> None:
         self.__check_settings(settings)
         self.settings = settings
-        promptlayer.api_key = settings.promptlayer_api_key
-        self.openai = promptlayer.openai
+
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+        self.logger = logging.getLogger(__name__)
+
+        self.openai = OpenAI()
         self.openai.api_key = settings.openai_api_key
         self.db = HallucinationDb(settings)
 
@@ -46,21 +49,18 @@ class QuestionGenerator(ABC):
     def try_gptapi_call(self, messages, temperature=0, model=GPT_MODEL_NAME):
         for i in range(3):
             try:
-                return self.openai.ChatCompletion.create(
+                return self.openai.chat.completions.create(
                     model=model,
                     temperature=temperature,
                     messages=messages)
             except Exception as exc:
-                logging.exception(f"Exception: {exc}")
+                self.logger.exception(f"Exception: {exc}")
                 time.sleep(60)
                 continue
 
     def __check_settings(self, settings):
-        if not settings.promptlayer_api_key:
-            raise ValueError("Promptlayer API key is not set")
         if not settings.openai_api_key:
             raise ValueError("OpenAI API key is not set")
-
 
 class NonExistentTermQuestionGenerator(QuestionGenerator):
     def __init__(self, settings, hallucinative_df: pd.DataFrame):
@@ -74,8 +74,9 @@ class NonExistentTermQuestionGenerator(QuestionGenerator):
             self.db.TERM_TRIPLETS_TABLE)
         
         for fake_term_id in self.fake_terms_ids:
-            print(f"creating for fake term id: {fake_term_id}")
-            self.__set_specific_term(fake_term_id)
+            self.__set_current_hypothetical_term(fake_term_id)
+
+            self.logger.info(f"creating for hypothetical term id: {fake_term_id}, term: {self.madeup_term}")
 
             source_id_list = self.specific_term_df["source_id"].unique().tolist()
             df_list = []
@@ -83,18 +84,15 @@ class NonExistentTermQuestionGenerator(QuestionGenerator):
                 df_list.append(self.specific_term_df[self.specific_term_df["source_id"] == source_id])
 
             for i in range(len(df_list)):
-                print("Source id: ", source_id_list[i])
                 arranged_df = pd.concat(df_list)
-                #print(arranged_df[['fake_term_id', 'real_term_id', 'source_id']])
                 df_list = df_list[1:] + df_list[:1]
 
                 added_triplets = 0
                 secondary_term_index = 0
                 while added_triplets < Q_PER_TERM:
-
                     secondary_term_id = arranged_df.iloc[secondary_term_index]["real_term_id"]
                     secondary_term_source_id = arranged_df.iloc[secondary_term_index]["source_id"]
-                    replacement_term_id = arranged_df.iloc[secondary_term_index + Q_PER_TERM]["real_term_id"]
+                    replacement_term_id = arranged_df.iloc[(secondary_term_index + Q_PER_TERM)]["real_term_id"]
                     replacement_term_source_id = arranged_df.iloc[secondary_term_index]["source_id"]
 
                     triplet_key = (fake_term_id, secondary_term_id, secondary_term_source_id, replacement_term_id, replacement_term_source_id)
@@ -102,9 +100,8 @@ class NonExistentTermQuestionGenerator(QuestionGenerator):
                     try:
                         self.__insert_triplet(triplet_key)
                         added_triplets += 1
-                        print("Added triplet: ", triplet_key)
                     except Exception as e:
-                        print("Skipped triplet: ", triplet_key)
+                        self.logger.info(f"Added triplet key: {triplet_key}")
                     secondary_term_index += 1
 
     def __insert_triplet(self, triplet_key):
@@ -118,15 +115,16 @@ class NonExistentTermQuestionGenerator(QuestionGenerator):
             )
         )
 
-    def generate(self):
+    def generate(self, check_existing_questions:bool=False):
+        self.check_existing_questions = check_existing_questions
         self.questions_table = self.db.GetTableDefinition(
             self.db.TERMS_QUESTIONS_TABLE)
         self.term_triplets = self.db.GetTableAsDf(
             self.db.TERM_TRIPLETS_COMBINED)
         
-        ### delete later
-        self.old_questions = self.db.GetTableDefinition(
-            self.db.TERM_QUESTIONS_TABLE)
+        if self.check_existing_questions:
+            self.old_questions = self.db.GetTableDefinition(
+                self.db.TERMS_QUESTIONS_TABLE)
         
         for index, row in self.term_triplets.iterrows():
             self.__generate_questions(row)
@@ -142,20 +140,18 @@ class NonExistentTermQuestionGenerator(QuestionGenerator):
         pattern = self.__get_combined_pattern(row["nonexistent_term"])
         programmatically_replaced_q = pattern.sub(row["replacement_term"], hallucinative_question)
         if programmatically_replaced_q == hallucinative_question and hallucinative_question != "test content":
-            print(f"Warning for replacement: {row['nonexistent_term']} not found in {hallucinative_question}")
-            print(row.to_dict())
+            self.logger.info(f"Warning for replacement: {row['nonexistent_term']} not found in {hallucinative_question}")
+            self.logger.info(row.to_dict())
         self.__insert_question(programmatically_replaced_q, row, PROGRAMMATIC_REPLACEMENT)
 
     def __fresh_replace(self, row):
 
-        ####
-        #### delete later
-        possible_question = self.__check_question(row, FRESH_REPLACEMENT)
-        if possible_question:
-            self.__insert_question(possible_question, row, FRESH_REPLACEMENT)
-            return possible_question
+        if self.check_existing_questions:
+            possible_question = self.__check_question(row, FRESH_REPLACEMENT)
+            if possible_question:
+                self.__insert_question(possible_question, row, FRESH_REPLACEMENT)
+                return possible_question
         
-
         user_prompt = templates.fresh_replacement_user.format(
             topic = f"""{row["topic"]}: {row["topic_explanation"]}""",
             main_term = f"""{row["replacement_term"]}: {row["replacement_explanation"]}""",
@@ -164,23 +160,23 @@ class NonExistentTermQuestionGenerator(QuestionGenerator):
         messages = [{"role": "system", "content": templates.fresh_replacement_system},
                     {"role": "user", "content": user_prompt}]
         fresh_response = self.try_gptapi_call(messages)
-        fresh_question = fresh_response['choices'][0]['message']['content']
+        fresh_question = fresh_response.choices[0].message.content
         self.__insert_question(fresh_question, row, FRESH_REPLACEMENT)
 
     def __generate_hallucinative_question(self, row):
 
-        ####
-        #### delete later
-        possible_question = self.__check_question(row, NO_REPLACEMENT)
-        if possible_question: 
-            if self.__validate_question(possible_question, row, NO_REPLACEMENT):
-                self.__insert_question(possible_question, row, NO_REPLACEMENT)
-                return possible_question
+        if self.check_existing_questions:
+            possible_question = self.__check_question(row, NO_REPLACEMENT)
+            if possible_question: 
+                if self.__validate_question(possible_question, row, NO_REPLACEMENT):
+                    self.__insert_question(possible_question, row, NO_REPLACEMENT)
+                    return possible_question
 
 
         hallucinative_messages = self.__get_hallucinative_messages(row)
         hallucinative_response = self.try_gptapi_call(hallucinative_messages)
-        hallucinative_question = hallucinative_response['choices'][0]['message']['content']
+
+        hallucinative_question = hallucinative_response.choices[0].message.content
         if self.__validate_question(hallucinative_question, row, NO_REPLACEMENT):
             self.__insert_question(hallucinative_question, row, NO_REPLACEMENT)
             return hallucinative_question
@@ -212,19 +208,12 @@ class NonExistentTermQuestionGenerator(QuestionGenerator):
             self.old_questions.c.secondary_source == row["secondary_source_id"],
             self.old_questions.c.replacement_type == replacement_type
         )
-        #print(query)
 
         result = self.db.sql.execute(query).fetchone()
         if result:
             return result["question"]
         else:
             return False
-        #if replacement_row is None:
-        #    main_id = main_row["fake_term_id"]
-        #    main_source = 0
-        #else:
-        #    main_id = replacement_row["real_term_id"]
-        #    main_source = replacement_row["source_id"]
 
     def __validate_question(self, hallucinative_question: str, row: pd.Series,
                             replacement_type: int = 0):
@@ -236,12 +225,11 @@ class NonExistentTermQuestionGenerator(QuestionGenerator):
         
         if hallucinative_question != "test content":
             if not re.search(main_pattern, hallucinative_question) and not replacement_type:
-                logging.warning(f"Warning for creation {replacement_type}: {main_pattern} not found in {hallucinative_question}")
-                #print(self.__get_hallucinative_messages(row))
+                self.logger.warning(f"Warning for creation {replacement_type}: {main_pattern} not found in {hallucinative_question}")
                 return False
 
             if not re.search(secondary_pattern, hallucinative_question):
-                logging.info(f"Info for creation: {row['secondary_term']} not found in {hallucinative_question}")
+                self.logger.info(f"Info for creation: {row['secondary_term']} not found in {hallucinative_question}")
                 return True
         return True
 
@@ -257,7 +245,7 @@ class NonExistentTermQuestionGenerator(QuestionGenerator):
             )
         )
 
-    def __set_specific_term(self, fake_term_id):
+    def __set_current_hypothetical_term(self, fake_term_id):
         self.specific_term_df = self.hallucinative_df[
             self.hallucinative_df["fake_term_id"] == fake_term_id]
         self.madeup_term = f"""{self.specific_term_df.iloc[0]["fake_term"]}: {self.specific_term_df.iloc[0]["fake_term_explanation"]}"""
