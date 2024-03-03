@@ -2,8 +2,11 @@
 from abc import ABC, abstractmethod
 import logging
 import pandas as pd
+import csv
+import json
 import datetime
 import time
+from src.utilities import get_strtime
 from datetime import datetime
 import promptlayer
 from openai import OpenAI
@@ -39,21 +42,32 @@ class QuestionAnswerProcessor(ABC):
     def answer(self, question):
         pass
 
-    def get_strtime(self):
-        return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    #def get_strtime(self):
+    #    return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    def process_questions(self, questions_df: pd.DataFrame = None, verbose: bool = False, reverse: bool = False, sampled: bool = False, half: bool = False):
+    def process_questions(self, questions_df:pd.DataFrame=None, verbose:bool=False, reverse:bool=False, sample_size:str=None, half:bool=False):
 
         self.logger.info(f"Processing questions with {self.model_name} model...")
 
+        self.use_db = False
+
         self.questions_df = questions_df
         if self.questions_df is None:
-            self.initalize_questions_df(sampled)
-        
+            self.use_db = True
+            self.initalize_questions_df(sample_size)
+        else:
+            if sample_size is not None:
+                self.logger.warning("Sample size is ignored because a DataFrame is provided.")
+              
         if reverse:
             self.questions_df = self.questions_df.iloc[::-1]
         if half:
             self.questions_df = self.questions_df.iloc[len(self.questions_df)//2:]
+
+        if not self.use_db:
+            self.answers_path = f"answers_{get_strtime()}.csv"
+            self.answers_df = pd.DataFrame(columns=list(self.questions_df.columns) + ['model_id', 'model_name', 'answer'])
+            self.answers_df.to_csv(self.answers_path, index=False)
 
         if verbose: 
             self.logger.info(f"There are {len(self.questions_df)} unanswered questions by {self.model_name} model in the dataset.")
@@ -72,20 +86,26 @@ class QuestionAnswerProcessor(ABC):
                 response_time = (end_time - start_time).seconds
                 response_times.append(response_time)
                 average_time = sum(response_times) / len(response_times)
-                self.logger.infoh(f"Time: {end_time.strftime('%H:%M:%S')} response took {response_time} seconds. Average response time: {average_time} \nAnswer: {answer}\n---\n")
-            self.db.sql.execute(
-                self.answers_table.insert().values(
-                    question_id = row["question_id"],
-                    model_id = self.model_id,
-                    answer = answer
+                self.logger.info(f"Time: {end_time.strftime('%H:%M:%S')} response took {response_time} seconds. Average response time: {average_time} \nAnswer: {answer}\n---\n")
+            
+            if not self.use_db:
+                new_row = pd.DataFrame(row).transpose()
+                new_row['model_id'] = self.model_id
+                new_row['model_name'] = self.model_name
+                new_row['answer'] = answer
+                new_row.to_csv(self.answers_path, mode='a', header=False, index=False, quoting=csv.QUOTE_ALL)
+            else:
+                self.db.sql.execute(
+                    self.answers_table.insert().values(
+                        question_id = row["question_id"],
+                        model_id = self.model_id,
+                        answer = answer
+                    )
                 )
-            )
             
             if answer == "WARNING! Model failure." or answer == "WARNING! Timeout.":
                 raise ProcessLockedException("Process locked due to a loop.")
 
-            
-        
     def GetModelId(self):
         query = self.models_table.select().where(self.models_table.c.name == self.model_name)
         query_result = self.db.sql.execute(query)
@@ -98,7 +118,7 @@ class QuestionAnswerProcessor(ABC):
             model_id = query_result.fetchone()[0]
         return model_id
         
-    def initalize_questions_df(self, sampled: bool = False):
+    def initalize_questions_df(self, sample_size:str=None):
         all_questions_df = self.db.GetTableAsDf(self.db.COMBINED_TERMS_QUESTIONS)
 
         answers_table = self.db.GetTableDefinition(self.db.TERMS_ANSWERS_TABLE)
@@ -106,9 +126,30 @@ class QuestionAnswerProcessor(ABC):
         answered_questions_df = pd.read_sql(answers_query, self.db.sql.connection)
         
         self.questions_df = all_questions_df[~all_questions_df['question_id'].isin(answered_questions_df['question_id'])]
-        if sampled:
-            self.questions_df = self.questions_df[self.questions_df['question_id'].isin(self.settings.sampled_question_ids)]
-        
+        if sample_size is not None:
+            self.sample_questions(sample_size)
+
+    def sample_questions(self, sample_size:str):
+        current_dir = os.path.dirname(os.path.abspath('__file__'))
+        parent_dir = os.path.dirname(current_dir)  
+        data_dir_current = os.path.join(current_dir, 'data')
+        data_dir_parent = os.path.join(parent_dir, 'data')
+
+        if os.path.exists(data_dir_current):
+            sampled_ids_path = os.path.join(data_dir_current, 'intermediate', 'sampled_ids.json')
+        elif os.path.exists(data_dir_parent):
+            sampled_ids_path = os.path.join(data_dir_parent, 'intermediate', 'sampled_ids.json')
+        else:
+            raise FileNotFoundError("The 'data' directory does not exist in the current or parent directory.")
+    
+
+        with open(sampled_ids_path, 'r') as f:
+            sampled_ids_dict = json.load(f)
+            if sample_size in sampled_ids_dict:
+                sampled_ids = sampled_ids_dict[sample_size]
+                self.questions_df = self.questions_df[self.questions_df['question_id'].isin(sampled_ids)]
+            else:
+                raise ValueError(f"Invalid sample size: {sample_size}. Expected '180', '1080', or None.")
 
 class OllamaAnswerProcessor(QuestionAnswerProcessor):
     def __init__(self, settings):
@@ -132,17 +173,11 @@ class GptAnswerProcessor(QuestionAnswerProcessor):
         self.__check_settings(settings)
         self.client = OpenAI(api_key=settings.openai_api_key)
 
-        #promptlayer.api_key = settings.promptlayer_api_key
-        #self.openai = promptlayer.openai
-        #self.openai.api_key = settings.openai_api_key
-
     def change_model(self, model_name):
         self.model_name = model_name
         self.model_id = self.GetModelId()
 
     def __check_settings(self, settings):
-        if not settings.promptlayer_api_key:
-            raise ValueError("Promptlayer API key is not set")
         if not settings.openai_api_key:
             raise ValueError("OpenAI API key is not set")
         

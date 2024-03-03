@@ -1,5 +1,7 @@
 **/settings.py
 
+sample_prompting/answers_*.csv
+
 __pycache__/
 *.py[cod]
 *$py.class
@@ -109,3 +111,6 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+
+ask_llm.ipynb
