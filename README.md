@@ -11,7 +11,7 @@ Hypothetical Terms Dataset for Benchmarking Hallucination Tendency of LLMs
 - 📋 [Requirements](#📋-requirements)
 - 🔧 [Set Up](#🔧-set-up)
 - 👋 [Contact](#👋-contact)
-- 🙏 [Acknowledgements](#🙏-acknowledgements)
+- 🙏 [Acknowledgements](#acknowledgements)
 
 
 ## 📘 Introduction
@@ -112,6 +112,6 @@ If you have any questions, issues, or if you need support with the project, you 
 
 Please feel free to report any bugs or issues, we appreciate your feedback!
 
-## 🙏 Acknowledgements
+## Acknowledgements
 
 The computational experiments conducted with open LLMs in this study were fully performed at TUBITAK ULAKBIM, High Performance and Grid Computing Center (TRUBA resources).
