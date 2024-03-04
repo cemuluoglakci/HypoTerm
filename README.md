@@ -2,18 +2,21 @@
 
 Hypothetical Terms Dataset for Benchmarking Hallucination Tendency of LLMs
 
-## Table of contents
+## 📚 Table of contents
 
-- 🚀 [Introduction](#introduction)
+- 📘 [Introduction](#📘-introduction)
 - 📜 [Publication](#📜-publication)
+- 📝 [Citation](#📝-citation)
+- 🚀 [Usage or Examples](#🚀-usage-or-examples)
 - 📋 [Requirements](#📋-requirements)
 - 🔧 [Set Up](#🔧-set-up)
 - 👋 [Contact](#👋-contact)
+- 🙏 [Acknowledgements](#🙏-acknowledgements)
 
 
-## Introduction
+## 📘 Introduction
 
-📚 HypoTermQA repository contains 
+HypoTermQA repository contains 
 
 * 📊 The HypoTermQA Benchmarking Dataset <a href="https://github.com/cemuluoglakci/HypoTermQA/tree/main/HypoTermQA_Dataset" class="button">View Dataset</a> 
 * 💻 The sample code to use the HypoTermQA Dataset on LLMs <a href="https://github.com/cemuluoglakci/HypoTermQA/tree/main/sample_prompting" class="button">View Code</a>
@@ -31,6 +34,30 @@ This repository contains the implementation of our research presented in the fol
 The paper was presented at EACL SRW 2024. You can see the poster we presented below:
 
 ![Poster Image](./images/poster.png)
+
+## 📝 Citation
+
+Our paper will be published in the proceedings of EACL SRW 2024. The citation details will be updated once the proceedings are published. Please check back for updates.
+
+In the meantime, you can cite our work as follows:
+
+```bibtex
+@misc{uluoglakci2024hypotermqa,
+  title={HypoTermQA: Hypothetical Terms Dataset for Benchmarking Hallucination Tendency of LLMs},
+  author={Cem Uluoglakci and Tugba Taskaya Temizel},
+  year={2024},
+  howpublished={To appear in the proceedings of EACL SRW 2024}
+}
+```
+
+## 🚀 Usage and Examples
+
+This repository contains several examples that demonstrate different aspects of the HypoTermQA Dataset and its usage with LLMs:
+
+* 💻 [Using the HypoTermQA Dataset with LLMs](https://github.com/cemuluoglakci/HypoTermQA/tree/main/sample_prompting): These examples show how to use the HypoTermQA Dataset with Language Models.
+* 🧪 [Evaluating Hallucination Tendency of LLMs](https://github.com/cemuluoglakci/HypoTermQA/tree/main/sample_evaluation): These examples demonstrate how to evaluate the hallucination tendency of Language Models using our dataset.
+* 📜 [Reproducing the Paper](https://github.com/cemuluoglakci/HypoTermQA/tree/main/sample_reproduction): These examples provide the code necessary to reproduce hypothetical dataset creation process.
+
 
 ## 📋 Requirements
 
@@ -81,6 +108,10 @@ Follow these steps to set up the development environment:
 If you have any questions, issues, or if you need support with the project, you can get in touch with us:
 
 * GitHub: [GitHub Profile](https://github.com/cemuluoglakci)
-* LinkedIn: [LinkedIn Profile](https://www.linkedin.com/in/cemuluoglakci/)
+
 
 Please feel free to report any bugs or issues, we appreciate your feedback!
+
+## 🙏 Acknowledgements
+
+The computational experiments conducted with open LLMs in this study were fully performed at TUBITAK ULAKBIM, High Performance and Grid Computing Center (TRUBA resources).
