@@ -7,7 +7,7 @@ Hypothetical Terms Dataset for Benchmarking Hallucination Tendency of LLMs
 - 📘 [Introduction](#-introduction)
 - 📜 [Publication](#-publication)
 - 📝 [Citation](#-citation)
-- 🚀 [Usage or Examples](#-usage-or-examples)
+- 🚀 [Usage and Examples](#-usage-and-examples)
 - 📋 [Requirements](#-requirements)
 - 🔧 [Set Up](#-set-up)
 - 👋 [Contact](#-contact)
