@@ -1,5 +1,18 @@
 # 🥶 HypoTermQA
 
+Hypothetical Terms Dataset for Benchmarking Hallucination Tendency of LLMs
+
+## Table of contents
+
+- 🚀 [Introduction](#introduction)
+- 📜 [Publication](#📜-publication)
+- 📋 [Requirements](#📋-requirements)
+- 🔧 [Set Up](#🔧-set-up)
+- 👋 [Contact](#👋-contact)
+
+
+## Introduction
+
 📚 HypoTermQA repository contains 
 
 * 📊 The HypoTermQA Benchmarking Dataset <a href="https://github.com/cemuluoglakci/HypoTermQA/tree/main/HypoTermQA_Dataset" class="button">View Dataset</a> 
@@ -28,7 +41,7 @@ The paper was presented at EACL SRW 2024. You can see the poster we presented be
 5. Milvus DB
 6. Pytorch (https://pytorch.org/get-started/locally/)
 
-## 🔧 Setting Up the Development Environment
+## 🔧 Set Up
 
 Follow these steps to set up the development environment:
 
