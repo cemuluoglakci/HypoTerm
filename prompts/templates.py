@@ -1,9 +1,7 @@
+### Prompt Templates for generating topics and candidate hypothetical terms.
+
 topic_generator = "What are the most popular 20 topics on the internet?"
 
-term_generator = """Make a list of 50 nonexistent made up terms about the following topic by using multiple common words.
-Do not combine words, just use at least 4 - 5 words together as a phenomenon.
-Do not use the words in the following list: ["conventional", "traditional", "holistic", " phenomenon ", "comprehensive ", "technique", "-"]
-Topic: {topic}"""
 term_generator = """Make a list of 50 nonexistent made up terms about the following topic by using multiple common words.
 Do not combine words, just use at least 4 - 5 words together as a phenomenon.
 Do not use the words in the following list: ["conventional", "traditional", "holistic", " phenomenon ", "comprehensive ", "technique", "-"]
@@ -14,6 +12,7 @@ Do not combine words. Use space between words. Do not use "-" character."""
 
 term_generator_followup_1 = """Make up explanation for each term."""
 
+### Prompt Templates for generating valid term suggestions.
 
 related_term_generator_system = """You are a linguistic expert.
 You will be given a TOPIC and a MADE-UP TERM.
@@ -27,6 +26,7 @@ Format should be a python list."""
 related_term_generator_user = """TOPIC => {topic}
 MADE-UP TERM => {madeup_term}"""
 
+### Prompt Templates for transforming terms into hypothetical questions.
 
 question_generator_system = """You are a linguistic expert.
 You will be given a TOPIC, a MADE-UP TERM and a REAL TERM.
@@ -39,6 +39,8 @@ question_generator_user = """TOPIC => {topic}
 MADE-UP TERM => {madeup_term}
 REAL TERM => {real_term}"""
 
+### Prompt Templates for transforming terms into valid questions.
+
 fresh_replacement_system = """You are a linguistic expert.
 You will be given a TOPIC, MAIN TERM and SECONDARY TERM.
 Compose a coherent question with MAIN TERM and SECONDARY TERM.
@@ -49,34 +51,7 @@ fresh_replacement_user = """TOPIC => {topic}
 MAIN TERM => {main_term}
 SECONDARY TERM => {secondary_term}"""
 
-
-answer_reflection_system = """You are a linguistic expert.
-You will be given a TOPIC, a MADE-UP TERM, a REAL TERM and QUESTION - ANSWER couple.
-The QUESTION is composed with REAL TERM and MADE-UP TERM.
-Analyze if the ANSWER is aware that the MADE-UP TERM does not exist."""
-
-answer_reflection_user = """TOPIC => {topic}
-MADE-UP TERM => {madeup_term}
-REAL TERM => {real_term}
-
-QUESTION => {question}
-ANSWER => {answer}"""
-
-certainty_reflection_system_old = '''You are a linguistic expert.
-You will be given a TERM and QUESTION - ANSWER couple.
-The QUESTION is composed with the TERM.
-Analyze if the ANSWER claims that the TERM is hypothetical, speculative or do not exist.
-First reason step by step then output "HYPOTHETICAL" or "REAL" in the following json format.
-{"reasoning":"",
-"certainty":""}'''
-
-
-certainty_reflection_user_old = """TERM => {term}
-
-QUESTION => {question}
-ANSWER => {answer}
-
-INSTRUCTION => Output should be in json format."""
+### Prompts for creating evaluator agents
 
 certainty_reflection_system = '''You are a linguistic expert.
 You will be given a TERM and QUESTION - ANSWER couple.
