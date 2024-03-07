@@ -49,7 +49,8 @@ class AnswerLabeler():
         self.logger.info(f"Term level evaluation count: {evals_df.shape[0]}")
         
         evaluator_model_ids = sorted(evals_df.model_id.unique())
-        evaluator_model_ids.remove(HUMAN_EVAL_MODEL_ID)
+        if HUMAN_EVAL_MODEL_ID in evaluator_model_ids:
+            evaluator_model_ids.remove(HUMAN_EVAL_MODEL_ID)
         evaluator_model_ids.remove(PROGRAMMATIC_CHECK_MODEL_ID)
         
         for evaluator_model_id in evaluator_model_ids:
