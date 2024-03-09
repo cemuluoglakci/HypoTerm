@@ -1,14 +1,13 @@
 import pandas as pd
-import json
 import logging
 import time
 import re
+import csv
 import string
+import ast
 from abc import ABC, abstractmethod
 from langchain.llms import Ollama
-from langchain.callbacks.manager import CallbackManager
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-import promptlayer
+
 from openai import OpenAI
 from sqlalchemy import update
 from sqlalchemy.dialects.mysql import insert
@@ -20,6 +19,7 @@ from src.responseparser import LLmResponseParser
 from prompts import templates
 from src.constants import *
 from src.ollamaclient import OllamaClient
+from src.utilities import get_strtime
 
 GPT_MODEL_NAME = "gpt-3.5-turbo"
 GPT_3_5_TURBO_EVAL = 2
@@ -34,6 +34,9 @@ DEFINITION_REFLECTION = 3
 CODE_CHECK = 4
 
 GPT_MODEL_LIST = ["gpt-3.5-turbo", "gpt-4-1106-preview"]
+
+EVAL_LABELS = {0: "valid", 1: "hallucination", 2: "irrelevant"}
+EVAL_TYPES = {1: "human", 2: "acceptance", 3: "definition", 4: "code check"}
 
 FUNCTION_EVALUATOR_ID = 10
 
@@ -63,19 +66,23 @@ class Term:
 
 class AnswerEvaluator():
     def __init__(self, evaluator_model_name, settings):
+
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+        self.logger = logging.getLogger(__name__)
+
         self.settings = settings
-        self.db = HallucinationDb(settings)
+        try:
+            self.db = HallucinationDb(settings)
+            self.answers_table = self.db.GetTableDefinition(self.db.TERMS_ANSWERS_TABLE)
+            self.eval_table = self.db.GetTableDefinition(self.db.TERMS_ANSWERS_EVAL_TABLE)
+        except:
+            self.db = None
+            self.logger.warning("Answer Evaluator initialized without database connection.")
 
         if evaluator_model_name in GPT_MODEL_LIST:
             self.model = GptEvaluator(evaluator_model_name, self.db, settings)
         else:
             self.model = OpenEvaluator(evaluator_model_name, self.db, settings)
-        
-        self.answers_table = self.db.GetTableDefinition(self.db.TERMS_ANSWERS_TABLE)
-        self.eval_table = self.db.GetTableDefinition(self.db.TERMS_ANSWERS_EVAL_TABLE)
-        self.verbose = True
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-        self.logger = logging.getLogger(__name__)
 
     def evaluate_model(self, model_under_test:str, verbose:bool = False, sampled_size:bool = False, reversed:bool = False, half:bool = False):
         answers_df = self.retrieve_answers(model_under_test, verbose, sampled_size)
@@ -83,7 +90,41 @@ class AnswerEvaluator():
         if half: answers_df = answers_df.iloc[len(answers_df)//2:]
         self.process_evaluation(answers_df, verbose)
 
-    def evaluate_df(self, answers_df:pd.DataFrame):
+    def evaluate_df(self, answers_df:pd.DataFrame, output_file:str= None):
+
+        answers_df = self._check_answers_df(answers_df)
+
+        self.logger.info(f"Processing evaluation of {answers_df.shape[0]} questions with {self.model.model_name} model...")
+
+        if not output_file:
+            output_file = f"evaluated_by_{self.model.model_name}_{get_strtime()}.csv"
+
+        # Open the output file in append mode
+        with open(output_file, 'a', newline='') as f:
+            writer = csv.writer(f)
+
+            # Write the header only if the file is empty
+            if f.tell() == 0:
+                # Get the column names from the original DataFrame
+                column_names = answers_df.columns.tolist()
+                # Add the new column names
+                column_names.extend(['eval_term', 'eval_label_id', 'eval_label', 'eval_type_id', 'eval_type', 'reflection'])
+                writer.writerow(column_names)
+
+            # Process each row one by one
+            for i, row in answers_df.iterrows():
+                evaluations = self.evaluate_row(row)
+
+                # Explode the evaluations list into multiple rows
+                for eval in evaluations:
+                    # Create a new row with the evaluation results
+                    new_row = row.tolist() + [eval['eval_term'], eval['eval_label'], EVAL_LABELS[eval['eval_label']], 
+                                              eval['eval_type'], EVAL_TYPES[eval['eval_type']], eval['reflection']]
+
+                    # Write the new row to the CSV file
+                    writer.writerow(new_row)
+
+    def evaluate_df_bulk(self, answers_df:pd.DataFrame):
         self.logger.info(f"Processing evaluation of {answers_df.shape[0]} questions with {self.model.model_name} model...")
         
         answers_df["evaluations"] = answers_df.apply(lambda row: self.evaluate_row(row), axis=1)
@@ -375,17 +416,64 @@ class AnswerEvaluator():
         self.logger.info(query.compile(compile_kwargs={"literal_binds": True}))
         return query_result.rowcount > 0
 
+
+
+    def _check_answers_df(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Check if df has the required columns
+        required_columns = ["answer_id", "answer", "question_id", "question",   "nonexistent_id", "nonexistent", "secondary_id", "secondary", "secondary_meaning",    "secondary_source", "replacement_id", "replacement", "replacement_meaning",    "replacement_source"]
+        if all(column in df.columns for column in required_columns):
+            return df
+
+        # Check if df has the following columns
+        alternative_columns = ["answer_id", "answer", "question_id", "question", "terms"]
+        df["answer_id"] = df.index.values
+        if not all(column in df.columns for column in alternative_columns):
+            raise Exception('DataFrame does not have the required columns')
+
+        # Check if "terms" column contains a list with two dictionaries
+        df["terms"] = df["terms"].apply(ast.literal_eval)
+        for terms in df['terms']:
+            if isinstance(terms, list) and len(terms) == 2:
+                for term in terms:
+                    if not all(key in term for key in ['termId', 'term', 'termSet', 'explanation']):
+                        raise Exception('terms column does not contain the required dictionaries')
+            else:
+                raise Exception('terms column does not contain a list with two dictionaries')
+
+        # If all checks pass, transform answer_df
+        return self._transform_answer_df(df)
+
+    def _transform_answer_df(self,answer_df: pd.DataFrame) -> pd.DataFrame:
+        answer_df['replacement_type'] = answer_df['terms'].apply(lambda x: x[0]['termSetId'])
+
+        answer_df['nonexistent_id'] = answer_df['terms'].apply(lambda x: x[0]["termId"] if x[0]['termSetId'] == 0 else 0)
+        answer_df['nonexistent'] = answer_df['terms'].apply(lambda x: x[0]["term"] if x[0]['termSetId'] == 0 else "")
+        answer_df['nonexistent_meaning'] = answer_df['terms'].apply(lambda x: x[0]["explanation"] if x[0]['termSetId'] == 0 else "")
+
+        answer_df['replacement_id'] = answer_df['terms'].apply(lambda x: x[0]["termId"] if x[0]['termSetId'] != 0 else 0)
+        answer_df['replacement'] = answer_df['terms'].apply(lambda x: x[0]["term"] if x[0]['termSetId'] != 0 else "")
+        answer_df['replacement_meaning'] = answer_df['terms'].apply(lambda x: x[0]["explanation"] if x[0]['termSetId'] != 0 else "")
+        answer_df['replacement_source'] = answer_df['terms'].apply(lambda x: x[0]["termSet"] if x[0]['termSetId'] != 0 else "")
+
+        answer_df['secondary_id'] = answer_df['terms'].apply(lambda x: x[1]["termId"])
+        answer_df['secondary'] = answer_df['terms'].apply(lambda x: x[1]["term"])
+        answer_df['secondary_meaning'] = answer_df['terms'].apply(lambda x: x[1]["explanation"])
+        answer_df['secondary_source'] = answer_df['terms'].apply(lambda x: x[1]["termSet"])
+
+        answer_df.drop('terms', axis=1, inplace=True)
+        return answer_df
+
 class EvaluatorModel(ABC):
     def __init__(self, model_name:str, db:HallucinationDb, settings) -> None:
         self.db = db
         self.settings = settings
         self.model_name = model_name
-        self.models_table = self.db.GetTableDefinition(self.db.MODELS_TABLE)
-        self.model_id = self.GetModelId()
+        if self.db:
+            self.models_table = self.db.GetTableDefinition(self.db.MODELS_TABLE)
+            self.model_id = self.GetModelId()
         self.system_prompt_certainty = templates.certainty_reflection_system
         self.system_prompt_meaning = templates.meaning_reflection_system
         self.parser = LLmResponseParser()
-
 
     @abstractmethod
     def check_term_accepted(self, metadata:QAMetadata, term:Term):

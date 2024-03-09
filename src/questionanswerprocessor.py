@@ -8,15 +8,11 @@ import datetime
 import time
 from src.utilities import get_strtime
 from datetime import datetime
-import promptlayer
 from openai import OpenAI
-import os, glob
+import os
 from langchain.llms import Ollama
-from langchain.callbacks.manager import CallbackManager
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from timeout_function_decorator import timeout
 
-from prompts.templates import llama2Templates
 from src.ollamaclient import OllamaClient
 from src.sqldb import HallucinationDb
 from src.custom_exceptions import ProcessLockedException
@@ -29,22 +25,25 @@ LLAMA2_7B_MODEL_ID = 2
 
 class QuestionAnswerProcessor(ABC):
     def __init__(self, settings) -> None:
-        self.settings = settings
-        self.db = HallucinationDb(settings)
-        self.answers_table = self.db.GetTableDefinition(self.db.TERMS_ANSWERS_TABLE)
-        self.models_table = self.db.GetTableDefinition(self.db.MODELS_TABLE)
-        self.MAX_NEW_TOKENS = 2000
 
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
         self.logger = logging.getLogger(__name__)
+
+        self.settings = settings
+
+        try:
+            self.db = HallucinationDb(settings)
+            self.answers_table = self.db.GetTableDefinition(self.db.TERMS_ANSWERS_TABLE)
+            self.models_table = self.db.GetTableDefinition(self.db.MODELS_TABLE)
+        except:
+            self.logger.warning("Answer Processor initialized without database connection.")
+
+        self.MAX_NEW_TOKENS = 2000
 
     @abstractmethod
     def answer(self, question):
         pass
 
-    #def get_strtime(self):
-    #    return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    
     def process_questions(self, questions_df:pd.DataFrame=None, verbose:bool=False, reverse:bool=False, sample_size:str=None, half:bool=False):
 
         self.logger.info(f"Processing questions with {self.model_name} model...")
@@ -158,7 +157,10 @@ class OllamaAnswerProcessor(QuestionAnswerProcessor):
 
     def load_model(self, model_name):
         self.model_name = model_name
-        self.model_id = self.GetModelId()
+        if hasattr(self, 'db'):
+            self.model_id = self.GetModelId()
+        else:
+            self.model_id = 0
         self.model = OllamaClient(model_name=model_name)
 
     def answer(self, question):
