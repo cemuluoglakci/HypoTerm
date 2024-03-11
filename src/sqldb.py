@@ -69,8 +69,10 @@ class HallucinationDb():
     TERM_TRIPLETS_TABLE = "term_triplets"
     TERM_TRIPLETS_COMBINED = "term_triplets_combined"
     TERMS_ANSWERS_EVAL_TABLE = "terms_answers_eval"
+    ANSWER_LABELS_TABLE = "terms_eval_answer_labels"
     ANSWER_LEVEL_LABELS= "label_answer_level"
     TERM_LEVEL_LABELS= "label_term_level"
+    
 
     def __init__(self, settings) -> None:
         self.settings = settings

@@ -108,6 +108,7 @@ Follow these steps to set up the development environment:
 If you have any questions, issues, or if you need support with the project, you can get in touch with us:
 
 * GitHub: [GitHub Profile](https://github.com/cemuluoglakci)
+* LinkedIn: [LinkedIn Profile](https://www.linkedin.com/in/cem-uluoglakci)
 
 
 Please feel free to report any bugs or issues, we appreciate your feedback!

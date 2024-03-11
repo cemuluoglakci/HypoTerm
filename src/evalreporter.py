@@ -13,12 +13,15 @@ FUNCTION = "function"
 class EvalReporter():
     def __init__(self, settings):
         self.settings = settings
-        self.db = HallucinationDb(self.settings)
-
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
         self.logger = logging.getLogger(__name__)
-        self.eval_table = self.db.GetTableDefinition(self.db.ANSWER_LEVEL_LABELS)
-        self.detail_table = self.db.GetTableDefinition(self.db.TERM_LEVEL_LABELS)
+
+        try:
+            self.db = HallucinationDb(self.settings)
+            self.eval_table = self.db.GetTableDefinition(self.db.ANSWER_LEVEL_LABELS)
+            self.detail_table = self.db.GetTableDefinition(self.db.TERM_LEVEL_LABELS)
+        except Exception as e:
+            self.logger.warning(f"EvalReporter initialized without a database connection: {str(e)}")
 
         plt.style.use(['science','no-latex'])
 
@@ -26,19 +29,22 @@ class EvalReporter():
 
         self.detail_columns = ["answer_source", "question_id", "answer_id", "question", "answer","isHypotheticalQuestion", "evaluator_model", "eval_id", "eval_type", "term_label_id", "term_label", "term", "term_id", "IsHypotheticalTerm", "term_source", "reflection", "answer_label_id", "answer_label"]
 
-    def get_eval_df(self, evaluator_model:str, model_under_test:str, sample_size:str=None):
-        query = self.eval_table.select(
-            ).where(self.eval_table.c.evaluator_model.in_([evaluator_model, FUNCTION])
-            ).where(self.eval_table.c.answer_source == model_under_test
-            )
-        
-        self.logger.info(f"sample size: {sample_size}")
+    def get_eval_df(self, evaluator_model:str, model_under_test:str, sample_size:str=None, analyse_df:pd.DataFrame=None):
+        if analyse_df is None:
+            query = self.eval_table.select(
+                ).where(self.eval_table.c.evaluator_model.in_([evaluator_model,     FUNCTION])
+                ).where(self.eval_table.c.answer_source == model_under_test
+                )
 
-        if sample_size:
-            query = self._filter_for_samples(query, self.eval_table, sample_size) 
+            self.logger.info(f"sample size: {sample_size}")
 
-        analyse_df = pd.read_sql(query, self.db.sql.connection)
+            if sample_size:
+                query = self._filter_for_samples(query, self.eval_table, sample_size) 
 
+            analyse_df = pd.read_sql(query, self.db.sql.connection)
+        else:
+            self.logger.info("The provided DataFrame is being used. The 'sample_size' parameter is ignored when a DataFrame is provided.")
+            
         # Define the order of the categories
         categories_order = ['valid', 'hallucination', 'irrelevant']
         # Replace the values and convert the column to a categorical type
@@ -76,7 +82,9 @@ class EvalReporter():
         return detail_df
 
     def get_eval_chart(self, evaluator_model:str, model_under_test:str, sample_size:str=None):
-        self.eval_df = self.get_eval_df(evaluator_model, model_under_test, sample_size)
+        if not hasattr(self, 'eval_df'):
+            print("No eval_df found. Creating a new one...")
+            self.eval_df = self.get_eval_df(evaluator_model, model_under_test, sample_size)
         evaluator_model_str = self._strip_tags(evaluator_model)   
         model_under_test_str = self._strip_tags(model_under_test).upper()
         font_size = 24
