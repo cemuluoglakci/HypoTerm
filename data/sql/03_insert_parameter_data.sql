@@ -12,5 +12,18 @@ INSERT INTO replacement_type (id, name) VALUES (1, 'programmatic');
 INSERT INTO replacement_type (id, name) VALUES (2, 'gold_answer');
 INSERT INTO replacement_type (id, name) VALUES (3, 'fresh');
 
+truncate table eval_source;
+INSERT INTO eval_source (id, name) 
+VALUES 
+(1, 'HumanEval'), 
+(2, 'certainty reflection'), 
+(3, 'definition reflection'), 
+(4, 'code_check');
+
 truncate table models;
 INSERT INTO models (id, name) VALUES (0, 'Human'), (1, 'gpt-3.5-turbo'), (2, 'llama2:7b-chat-q4_1'), (3, 'ChatGPT_August_3_2023'), (4, 'orca-mini:3b-q4_1'), (5, 'orca-mini:7b-q4_1'), (6, 'llama2:13b-chat-q4_K_M'), (7, 'llama2:70b-chat-q4_K_M'), (8, 'llama2:70b-chat-q4_1'), (9, 'llama2:13b-chat-q4_1'), (10, 'function');
+
+truncate table eval_names;
+INSERT INTO eval_names (`id`, `name`) VALUES ('0', 'valid'), ('1', 'hallucination'), ('2', 'irrelevant');
+
+
