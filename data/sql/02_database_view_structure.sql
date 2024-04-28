@@ -348,6 +348,8 @@ SELECT e.id as eval_id,
     
 	a.question_id,
     a.IsHallucinative as isHypotheticalQuestion,
+    a.replacement_type as replacement_type_id,
+    r.name as replacement_type,
 	e.eval_label,
     n.name as eval_label_name,
     e.answer_id,
@@ -369,6 +371,7 @@ term_source as ts,
 models as m, 
 eval_names as n
 , terms_eval_answer_labels as ae
+, replacement_type as r
 
 where 
 a.answer_id = e.answer_id and
@@ -377,6 +380,7 @@ e.model_id = m.id and
 e.term_source = ts.id and
 e.eval_label = n.id
 and a.answer_id = ae.answer_id
+and a.replacement_type = r.id
 
 order by question_id;
 
